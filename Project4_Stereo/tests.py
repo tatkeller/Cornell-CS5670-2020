@@ -14,7 +14,7 @@ def skip_not_implemented(func):
     def wrapper():
         try:
             func()
-        except NotImplementedError, exc:
+        except NotImplementedError as exc:
             raise SkipTest(
                 "Test {0} is skipped {1}".format(func.__name__, exc))
     wrapper.__name__ = func.__name__
@@ -46,8 +46,8 @@ def preprocess_ncc_delta_test():
     correct[ncc_half:-ncc_half, ncc_half:-ncc_half, :] = - \
         1.0 / (ncc_size * math.sqrt(3 * ncc_size ** 2 - 3))
     x = (ncc_size ** 2 - 1.0) / (ncc_size * math.sqrt(3 * ncc_size ** 2 - 3))
-    for i in xrange(ncc_size):
-        for j in xrange(ncc_size):
+    for i in range(ncc_size):
+        for j in range(ncc_size):
             correct[-(i + ncc_half + 1), -(j + ncc_half + 1), ncc_size **
                     2 * 0 + ncc_size * i + j] = x
             correct[-(i + ncc_half + 1), -(j + ncc_half + 1), ncc_size **
@@ -576,7 +576,7 @@ def ncc_full_offset_test():
 
     image = imread('test_materials/justinpic_c.png')
 
-    split = image.shape[1] / 2
+    split = int(image.shape[1] / 2)
     left = image[:, :split, :]
     right = image[:, split:, :]
 
@@ -613,7 +613,7 @@ def ncc_full_shapes_test():
 
 @skip_not_implemented
 def compute_photometric_stereo_full_test():
-    images = [imread('test_materials/sphere%02d.png' % i) for i in xrange(3)]
+    images = [imread('test_materials/sphere%02d.png' % i) for i in range(3)]
     lights = np.load('test_materials/sphere_lights.npy')
 
     albedo, normals = compute_photometric_stereo(lights, images)

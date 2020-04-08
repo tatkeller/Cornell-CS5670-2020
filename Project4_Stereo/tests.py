@@ -35,7 +35,7 @@ def preprocess_ncc_zeros_test():
 @skip_not_implemented
 def preprocess_ncc_delta_test():
     ncc_size = 5
-    ncc_half = ncc_size / 2
+    ncc_half = int(ncc_size / 2)
 
     image = np.zeros((2 * ncc_size - 1, 2 * ncc_size - 1, 3), dtype=np.float32)
     image[ncc_size - 1, ncc_size - 1, :] = ncc_size ** 2
@@ -78,7 +78,7 @@ def preprocess_ncc_uniform_test():
 @skip_not_implemented
 def correlated_ncc_test():
     ncc_size = 5
-    ncc_half = ncc_size / 2
+    ncc_half = int(ncc_size / 2)
 
     image1 = np.random.random((2 * ncc_size - 1, 2 * ncc_size - 1, 3))
     image2 = image1
@@ -99,7 +99,7 @@ def correlated_ncc_test():
 @skip_not_implemented
 def anticorrelated_ncc_test():
     ncc_size = 5
-    ncc_half = ncc_size / 2
+    ncc_half = int(ncc_size / 2)
 
     image1 = np.random.random((2 * ncc_size - 1, 2 * ncc_size - 1, 3))
     image2 = -image1
@@ -152,7 +152,7 @@ def offset_ncc_test():
 @skip_not_implemented
 def scale_ncc_test():
     ncc_size = 5
-    ncc_half = ncc_size / 2
+    ncc_half = int(ncc_size / 2)
 
     image1 = np.random.random((2 * ncc_size - 1, 2 * ncc_size - 1, 3))
     image2 = image1 * 2
@@ -174,7 +174,7 @@ def scale_ncc_test():
 @skip_not_implemented
 def offset_and_scale_ncc_test():
     ncc_size = 5
-    ncc_half = ncc_size / 2
+    ncc_half = int(ncc_size / 2)
 
     image1 = np.random.random((2 * ncc_size - 1, 2 * ncc_size - 1, 3))
     image2 = image1 * 2 + 3
@@ -555,7 +555,7 @@ def preprocess_ncc_full_test():
 @skip_not_implemented
 def ncc_full_identity_test():
     ncc_size = 5
-    ncc_half = ncc_size / 2
+    ncc_half = int(ncc_size / 2)
 
     normalized = np.load('test_materials/fabrics_normalized.npy')
 

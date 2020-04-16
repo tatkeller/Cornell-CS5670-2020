@@ -33,33 +33,24 @@ def compute_photometric_stereo_impl(lights, images):
     from numpy.linalg import inv
     from numpy.linalg import norm
     L = np.array(lights)
-    print(L.shape, "L")
-    print(np.array(images).shape)
-    testI = np.array(images)
-    print(testI[np.where(testI > 0)])
-    I = np.array(images).reshape((-1,np.array(images).shape[1]*np.array(images).shape[2]*np.array(images).shape[3]))
-    print(I[np.where(I > 0)])
-    print(I.shape, "I")
+    dim1 = np.array(images).shape[1]
+    dim2 = np.array(images).shape[2]
+    dim3 = np.array(images).shape[3]
+
+    I = np.array(images).reshape((-1, dim1 * dim2 * dim3))
     G = np.dot(pinv(L),I)
-    print(G.shape,"G",G.dtype)
     k = norm(G,2,0).reshape((1,-1)) #column based 2 norm
+
     k[k<1e-7] = 0
-    print(k.shape,"k",k.dtype)
-    Nravel = np.divide(G, k,order=0,dtype=np.float64)
-    Nravel[np.where(Nravel == np.inf)] = 0
-    print(Nravel.shape,"Nravel", Nravel.dtype)
-    N = Nravel.reshape((-1,np.array(images).shape[1],np.array(images).shape[2],np.array(images).shape[3]))
-    print(N.shape,"N", N.dtype)
+    Nravel = np.divide(G, k,order=0,out=np.zeros_like(G), where=k!=0, dtype=np.float64)
+
+    N = Nravel.reshape((-1, dim1, dim2, dim3))
     N = np.mean(N, axis=3)
-    print(N.shape, "N", N.dtype)
-    N = N.T
-    print(N.shape, "N", N.dtype)
-    k = k.reshape(-1).reshape((np.array(images).shape[1],np.array(images).shape[2],np.array(images).shape[3]))
-    print(k.shape,"k")
+
+    N = np.transpose(N, (1, 2, 0))
+    k = k.reshape(-1).reshape((dim1, dim2, dim3))
 
     return k, N
-    #raise NotImplementedError()
-
 
 def project_impl(K, Rt, points):
     """

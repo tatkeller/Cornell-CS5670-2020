@@ -42,7 +42,7 @@ def compute_photometric_stereo_impl(lights, images):
     k = norm(G,2,0).reshape((1,-1)) #column based 2 norm
 
     k[k<1e-7] = 0
-    Nravel = np.divide(G, k,order=0,out=np.zeros_like(G), where=k!=0, dtype=np.float64)
+    Nravel = np.divide(G, k,out=np.zeros_like(G), where=k!=0, dtype=np.float64)
 
     N = Nravel.reshape((-1, dim1, dim2, dim3))
     N = np.mean(N, axis=3)
@@ -62,7 +62,27 @@ def project_impl(K, Rt, points):
     Output:
         projections -- height x width x 2 array of 2D projections
     """
-    raise NotImplementedError()
+    # print (K.shape, K)
+    # print (Rt.shape, Rt)
+    # print (points.shape, points)
+    from numpy.linalg import multi_dot
+    # print (points)
+    # print (points.shape)
+    a = points.reshape((points.shape[0]*points.shape[1], -1))
+    b = np.ones(((points.shape[0]*points.shape[1], 1)))
+    points_proj = np.hstack((a, b))
+    print(points_proj.shape)
+    # res1 = np.dot(K, Rt)
+    # print(res1.shape)
+    res = multi_dot((K, Rt, points_proj.T))
+    print(res.shape)
+
+    c1 = res[0,:] / res[2,:]
+    c2 = res[1,:] / res[2,:]
+    c = np.vstack((c1, c2)).T
+    projections = c.reshape((points.shape[0], points.shape[1], -1))
+    print (projections.shape)
+    return projections
 
 
 def preprocess_ncc_impl(image, ncc_size):

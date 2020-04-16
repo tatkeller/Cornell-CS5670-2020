@@ -29,7 +29,36 @@ def compute_photometric_stereo_impl(lights, images):
         normals -- float32 height x width x 3 image with dimensions matching
                    the input images.
     """
-    raise NotImplementedError()
+    from numpy.linalg import pinv
+    from numpy.linalg import inv
+    from numpy.linalg import norm
+    L = np.array(lights)
+    print(L.shape, "L")
+    print(np.array(images).shape)
+    testI = np.array(images)
+    print(testI[np.where(testI > 0)])
+    I = np.array(images).reshape((-1,np.array(images).shape[1]*np.array(images).shape[2]*np.array(images).shape[3]))
+    print(I[np.where(I > 0)])
+    print(I.shape, "I")
+    G = np.dot(pinv(L),I)
+    print(G.shape,"G",G.dtype)
+    k = norm(G,2,0).reshape((1,-1)) #column based 2 norm
+    k[k<1e-7] = 0
+    print(k.shape,"k",k.dtype)
+    Nravel = np.divide(G, k,order=0,dtype=np.float64)
+    Nravel[np.where(Nravel == np.inf)] = 0
+    print(Nravel.shape,"Nravel", Nravel.dtype)
+    N = Nravel.reshape((-1,np.array(images).shape[1],np.array(images).shape[2],np.array(images).shape[3]))
+    print(N.shape,"N", N.dtype)
+    N = np.mean(N, axis=3)
+    print(N.shape, "N", N.dtype)
+    N = N.T
+    print(N.shape, "N", N.dtype)
+    k = k.reshape(-1).reshape((np.array(images).shape[1],np.array(images).shape[2],np.array(images).shape[3]))
+    print(k.shape,"k")
+
+    return k, N
+    #raise NotImplementedError()
 
 
 def project_impl(K, Rt, points):

@@ -181,57 +181,58 @@ def preprocess_ncc_impl(image, ncc_size):
 
     print(image.shape, "image")
 
-    for i in range(ncc_size):
-        windows[i, :, 0, :, :] = np.transpose(rolling_window(image[i:image.shape[0]-ncc_size+i+1,:,0], ncc_size),(1,0,2))
-        windows[i, :, 1, :, :] = np.transpose(rolling_window(image[i:image.shape[0]-ncc_size+i+1,:,1], ncc_size),(1,0,2))
-        windows[i, :, 2, :, :] = np.transpose(rolling_window(image[i:image.shape[0]-ncc_size+i+1,:,2], ncc_size),(1,0,2))
+    for i in range(image.shape[0]-ncc_size):
+        windows[i, :, 0, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,0], ncc_size),(1,0,2))
+        windows[i, :, 1, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,1], ncc_size),(1,0,2))
+        windows[i, :, 2, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,2], ncc_size),(1,0,2))
 
     p = windows
 
     if p.shape[2] == 1:
         # Mean
-        pMeanVal = np.mean(np.mean(p, axis = 1),axis=1)
-        means = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), pMeanVal)))
-        patchMinusMean = p
-        patchMinusMean = np.subtract(patchMinusMean,means)
+        pMeanVal = np.mean(np.mean(p, axis = 3),axis=3)
+        means = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
+        p = np.subtract(p,means)
     
         # Norm
-        normedP = norm(norm(norm(patchMinusMean,axis=1),axis=1),axis=1)
+        normedP = norm(norm(norm(p,axis=4),axis=3),axis=2)
 
         normedP[np.where(normedP < 1e-6)] = 0
 
-        ans = np.divide(patchMinusMean,normedP)
+        normMapped = np.array(list(map(lambda x : np.full((p.shape[2],ncc_size,ncc_size),x), normedP[:,:].reshape(-1)))).reshape(p.shape[0],p.shape[1],p.shape[2],ncc_size,ncc_size)
+
+        ans = np.divide(p,normMapped)
 
     elif p.shape[2] == 3:
         # Mean
-        prMeanVal = np.mean(np.mean(p[:,:,:,0], axis = 1),axis=1)
-        pbMeanVal = np.mean(np.mean(p[:,:,:,1], axis = 1),axis=1)
-        pgMeanVal = np.mean(np.mean(p[:,:,:,2], axis = 1),axis=1)
-        meansR = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), prMeanVal)))
-        meansB = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), pbMeanVal)))
-        meansG = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), pgMeanVal)))
+        pMeanVal = np.mean(np.mean(p, axis = 3),axis=3)
+        print(pMeanVal.shape)
+
+        meansR = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:,0].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
+        meansG = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:,1].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
+        meansB = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:,2].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
+
         p[:,:,0] = np.subtract(p[:,:,0],meansR)
-        p[:,:,1] = np.subtract(p[:,:,1],meansB)
-        p[:,:,2] = np.subtract(p[:,:,2],meansG)
+        p[:,:,1] = np.subtract(p[:,:,1],meansG)
+        p[:,:,2] = np.subtract(p[:,:,2],meansB)
     
         # Norm
-        normedP = norm(norm(norm(p,axis=1),axis=1),axis=1)
+        normedP = norm(norm(norm(p,axis=4),axis=3),axis=2)
+
 
         normedP[np.where(normedP < 1e-6)] = 0
 
-        ans = np.divide(p,normedP)
+        normMapped = np.array(list(map(lambda x : np.full((p.shape[2],ncc_size,ncc_size),x), normedP[:,:].reshape(-1)))).reshape(p.shape[0],p.shape[1],p.shape[2],ncc_size,ncc_size)
 
+        ans = np.zeros((p.shape[0],p.shape[1],p.shape[2],ncc_size,ncc_size))
+
+        np.divide(p,normMapped,out=ans,where=normMapped!=0)
 
     pad = np.zeros((image.shape[0], image.shape[1],image.shape[2],ncc_size,ncc_size))
 
     pad[offset:-offset,offset:-offset,:,:,:] = ans
 
     pad = pad.reshape((pad.shape[0],pad.shape[1],-1))
-
-    #ans = np.pad(ans, ((offset,offset),(offset,offset),0,0,0),'constant', constant_values=0)
-
-    print(pad.shape)
-    print(image.shape)
 
     return pad
 

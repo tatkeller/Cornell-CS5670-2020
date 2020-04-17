@@ -131,10 +131,70 @@ def preprocess_ncc_impl(image, ncc_size):
     Input:
         image -- height x width x channels image of type float32
         ncc_size -- integer width and height of NCC patch region; assumed to be odd
-    Output:
+    Output:              81    *      ([1,2,3]*9)
         normalized -- heigth x width x (channels * ncc_size**2) array
     """
-    raise NotImplementedError()
+    from numpy.linalg import norm
+    def partition(image,ncc_size):
+        overlapR = image.shape[0] % ncc_size
+        overlapC = image.shape[1] % ncc_size
+        if (overlapR) == 0 and (overlapC) == 0:
+            partition = image
+        elif (overlapR) == 0 and (not (overlapC) == 0):
+            partition = image[:-overlapC,:]
+        elif (not (overlapR) == 0) and (overlapC) == 0:
+            partition = image[:,:-overlapR]
+        else:
+            partition = image[:-overlapC,:-overlapR]
+        return partition
+
+    p = partition(image, ncc_size)
+
+    p = p.reshape(p.shape[0]//ncc_size, 
+                  ncc_size, p.shape[1]//ncc_size, 
+                  ncc_size, p.shape[2]).swapaxes(1, 2).reshape(-1, 5, 5, p.shape[2])
+
+    if p.shape[3] == 1:
+        # Mean
+        pMeanVal = np.mean(np.mean(p, axis = 1),axis=1)
+        means = np.array(list(map(lambda x : np.full((p.shape[1],p.shape[2]),x), pMeanVal)))
+        patchMinusMean = p
+        patchMinusMean = np.subtract(patchMinusMean,means)
+    
+        # Norm
+        normedP = norm(norm(norm(patchMinusMean,axis=1),axis=1),axis=1)
+
+        normedP[np.where(normedP < 1e-6)] = 0
+
+        ans = np.divide(patchMinusMean,normedP)
+
+    elif p.shape[3] == 3:
+        # Mean
+        prMeanVal = np.mean(np.mean(p[:,:,:,0], axis = 1),axis=1)
+        pbMeanVal = np.mean(np.mean(p[:,:,:,1], axis = 1),axis=1)
+        pgMeanVal = np.mean(np.mean(p[:,:,:,2], axis = 1),axis=1)
+        meansR = np.array(list(map(lambda x : np.full((p.shape[1],p.shape[2]),x), prMeanVal)))
+        meansB = np.array(list(map(lambda x : np.full((p.shape[1],p.shape[2]),x), pbMeanVal)))
+        meansG = np.array(list(map(lambda x : np.full((p.shape[1],p.shape[2]),x), pgMeanVal)))
+        patchMinusMean = p[:,:,:,:]
+        patchMinusMean[:,:,:,0] = np.subtract(patchMinusMean[:,:,:,0],meansR)
+        patchMinusMean[:,:,:,1] = np.subtract(patchMinusMean[:,:,:,1],meansB)
+        patchMinusMean[:,:,:,2] = np.subtract(patchMinusMean[:,:,:,2],meansG)
+    
+        # Norm
+        normedP = norm(norm(norm(patchMinusMean,axis=1),axis=1),axis=1)
+
+        normedP[np.where(normedP < 1e-6)] = 0
+
+        ans = np.divide(patchMinusMean,normedP)
+
+
+    print(ans.shape)
+    print(image.shape)
+
+    return ans
+
+    #raise NotImplementedError()
 
 
 def compute_ncc_impl(image1, image2):

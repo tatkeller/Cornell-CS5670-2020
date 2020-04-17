@@ -181,7 +181,7 @@ def preprocess_ncc_impl(image, ncc_size):
 
     print(image.shape, "image")
 
-    for i in range(image.shape[0]-ncc_size):
+    for i in range(image.shape[0]-ncc_size+1):
         windows[i, :, 0, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,0], ncc_size),(1,0,2))
         windows[i, :, 1, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,1], ncc_size),(1,0,2))
         windows[i, :, 2, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,2], ncc_size),(1,0,2))
@@ -229,6 +229,10 @@ def preprocess_ncc_impl(image, ncc_size):
         np.divide(p,normMapped,out=ans,where=normMapped!=0)
 
     pad = np.zeros((image.shape[0], image.shape[1],image.shape[2],ncc_size,ncc_size))
+
+    print(pad.shape, "pad")
+    print(ans.shape, "ans")
+    print(offset, "offset")
 
     pad[offset:-offset,offset:-offset,:,:,:] = ans
 

@@ -32,22 +32,32 @@ def compute_photometric_stereo_impl(lights, images):
     from numpy.linalg import pinv
     from numpy.linalg import inv
     from numpy.linalg import norm
+
     L = np.array(lights)
     dim1 = np.array(images).shape[1]
     dim2 = np.array(images).shape[2]
     dim3 = np.array(images).shape[3]
 
+    # Flatten the images so that each image is a row (NxM)
     I = np.array(images).reshape((-1, dim1 * dim2 * dim3))
+    # The least squares formula
     G = np.dot(pinv(L),I)
+    # the albedos are the norm of each individual pixel in the images (columns in each row)
     k = norm(G,2,0).reshape((1,-1)) #column based 2 norm
 
     k[k<1e-7] = 0
+
+    # Each normal vector is G/k, where k is the respective albedo for the normal vector
     Nravel = np.divide(G, k,out=np.zeros_like(G), where=k!=0, dtype=np.float64)
 
+    #Reshape the images
     N = Nravel.reshape((-1, dim1, dim2, dim3))
+    # only average the color channels
     N = np.mean(N, axis=3)
 
+    #Flip dimensions to be correct order
     N = np.transpose(N, (1, 2, 0))
+    #same as above
     k = k.reshape(-1).reshape((dim1, dim2, dim3))
 
     return k, N
@@ -62,26 +72,18 @@ def project_impl(K, Rt, points):
     Output:
         projections -- height x width x 2 array of 2D projections
     """
-    # print (K.shape, K)
-    # print (Rt.shape, Rt)
-    # print (points.shape, points)
     from numpy.linalg import multi_dot
-    # print (points)
-    # print (points.shape)
+
     a = points.reshape((points.shape[0]*points.shape[1], -1))
     b = np.ones(((points.shape[0]*points.shape[1], 1)))
     points_proj = np.hstack((a, b))
-    print(points_proj.shape)
-    # res1 = np.dot(K, Rt)
-    # print(res1.shape)
+
     res = multi_dot((K, Rt, points_proj.T))
-    print(res.shape)
 
     c1 = res[0,:] / res[2,:]
     c2 = res[1,:] / res[2,:]
     c = np.vstack((c1, c2)).T
     projections = c.reshape((points.shape[0], points.shape[1], -1))
-    print (projections.shape)
     return projections
 
 
@@ -166,21 +168,26 @@ def preprocess_ncc_impl(image, ncc_size):
     """
     from numpy.linalg import norm
 
+    # We will manipulate/normalize the image
     p = image
 
+    # rolling window is a helper function, given by numpy's blog
     def rolling_window(a, window):
         shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
         strides = a.strides + (a.strides[-1],)
         return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
-
+    #Any window that goes over the edge of the image should be set to zero,
+    #so the first and last ncc_size//2 rows and columns should be zeros
     offset = ncc_size//2
+
+    #The inside windows which are not zeros are initialized, 
+    #the shape is (height-offset, width-offset, channels, windowsize, windowsize)
     windows = np.zeros((image.shape[0] - offset*2, image.shape[1] - offset*2,image.shape[2],ncc_size,ncc_size))
 
-    print(windows.shape)
 
-    print(image.shape, "image")
-
+    # Calculate the rolling window in a single for loop that sweeps a window of 5 downwards
+    # and then transposes the vector to be the correct dimensions
     for i in range(image.shape[0]-ncc_size+1):
         windows[i, :, 0, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,0], ncc_size),(1,0,2))
         windows[i, :, 1, :, :] = np.transpose(rolling_window(image[i:i+ncc_size,:,1], ncc_size),(1,0,2))
@@ -188,26 +195,28 @@ def preprocess_ncc_impl(image, ncc_size):
 
     p = windows
 
+    # if grayscale
     if p.shape[2] == 1:
-        # Mean
+        # Mean - only the window dimensions (windowXwindow)
         pMeanVal = np.mean(np.mean(p, axis = 3),axis=3)
+        # Expand the means of each window to be the correct shape to calculate the subtraction
         means = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
         p = np.subtract(p,means)
     
-        # Norm
+        # Norm - only on the window dimensions and channels (channelsXwindowXwindow) 
         normedP = norm(norm(norm(p,axis=4),axis=3),axis=2)
-
         normedP[np.where(normedP < 1e-6)] = 0
 
+        # Expand the norms of each window to be the correct shape for division
         normMapped = np.array(list(map(lambda x : np.full((p.shape[2],ncc_size,ncc_size),x), normedP[:,:].reshape(-1)))).reshape(p.shape[0],p.shape[1],p.shape[2],ncc_size,ncc_size)
 
+        #divide to normalize
         ans = np.divide(p,normMapped)
 
     elif p.shape[2] == 3:
-        # Mean
+        # Mean - only the window dimensions (windowXwindow)
         pMeanVal = np.mean(np.mean(p, axis = 3),axis=3)
-        print(pMeanVal.shape)
-
+        # Expand the means of each window to be the correct shape to calculate the subtraction
         meansR = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:,0].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
         meansG = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:,1].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
         meansB = np.array(list(map(lambda x : np.full((ncc_size,ncc_size),x), pMeanVal[:,:,2].reshape(-1)))).reshape(p.shape[0],p.shape[1],ncc_size,ncc_size)
@@ -216,32 +225,28 @@ def preprocess_ncc_impl(image, ncc_size):
         p[:,:,1] = np.subtract(p[:,:,1],meansG)
         p[:,:,2] = np.subtract(p[:,:,2],meansB)
     
-        # Norm
+        # Norm - only on the window dimensions and channels (channelsXwindowXwindow) 
         normedP = norm(norm(norm(p,axis=4),axis=3),axis=2)
 
 
         normedP[np.where(normedP < 1e-6)] = 0
 
+        # Expand the norms of each window to be the correct shape for division
         normMapped = np.array(list(map(lambda x : np.full((p.shape[2],ncc_size,ncc_size),x), normedP[:,:].reshape(-1)))).reshape(p.shape[0],p.shape[1],p.shape[2],ncc_size,ncc_size)
 
         ans = np.zeros((p.shape[0],p.shape[1],p.shape[2],ncc_size,ncc_size))
-
+        #divide to normalize
         np.divide(p,normMapped,out=ans,where=normMapped!=0)
 
+    #Now the full normalized image/vector can be saved
     pad = np.zeros((image.shape[0], image.shape[1],image.shape[2],ncc_size,ncc_size))
-
-    print(pad.shape, "pad")
-    print(ans.shape, "ans")
-    print(offset, "offset")
-
+    #We place what we calculated (ans) in the middle of the empty vector, so that there is a padding
+    #of zeros on the outer rim
     pad[offset:-offset,offset:-offset,:,:,:] = ans
 
     pad = pad.reshape((pad.shape[0],pad.shape[1],-1))
 
     return pad
-
-    #raise NotImplementedError()
-
 
 def compute_ncc_impl(image1, image2):
     """
@@ -255,4 +260,8 @@ def compute_ncc_impl(image1, image2):
         ncc -- height x width normalized cross correlation between image1 and
                image2.
     """
-    raise NotImplementedError()
+
+    # As shown in the lecture slides,
+    # the formula is is just the windows of image 1 * windows of image 2 (already normalize)
+    # and then the sum of all of the values within those windows
+    return np.sum(np.multiply(image1,image2),axis=2)

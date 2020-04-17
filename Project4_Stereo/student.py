@@ -74,16 +74,22 @@ def project_impl(K, Rt, points):
     """
     from numpy.linalg import multi_dot
 
+    # Reshape the points to have a second dimension of 4 in order to run the projection function
     a = points.reshape((points.shape[0]*points.shape[1], -1))
     b = np.ones(((points.shape[0]*points.shape[1], 1)))
     points_proj = np.hstack((a, b))
 
+    # Multiple the intrinsics, extrinsics, and 3D points
     res = multi_dot((K, Rt, points_proj.T))
 
+    # Divide the first and second coordinates by the third to get the 2D projected points
     c1 = res[0,:] / res[2,:]
     c2 = res[1,:] / res[2,:]
     c = np.vstack((c1, c2)).T
+
+    # Reshape the output to match the specifications
     projections = c.reshape((points.shape[0], points.shape[1], -1))
+    
     return projections
 
 
@@ -138,33 +144,8 @@ def preprocess_ncc_impl(image, ncc_size):
     Input:
         image -- height x width x channels image of type float32
         ncc_size -- integer width and height of NCC patch region; assumed to be odd
-    Output:              81    *      ([1,2,3]*9)
-
-                        9       9          1           25
-                          (2,2)
+    Output:
         normalized -- heigth x width x (channels * ncc_size**2) array
-    """
-
-    """
-    from numpy.linalg import norm
-    def partition(image,ncc_size):
-        overlapR = image.shape[0] % ncc_size
-        overlapC = image.shape[1] % ncc_size
-        if (overlapR) == 0 and (overlapC) == 0:
-            partition = image
-        elif (overlapR) == 0 and (not (overlapC) == 0):
-            partition = image[:-overlapC,:]
-        elif (not (overlapR) == 0) and (overlapC) == 0:
-            partition = image[:,:-overlapR]
-        else:
-            partition = image[:-overlapC,:-overlapR]
-        return partition
-
-    p = partition(image, ncc_size)
-
-    p = p.reshape(p.shape[0]//ncc_size, 
-                  ncc_size, p.shape[1]//ncc_size, 
-                  ncc_size, p.shape[2]).swapaxes(1, 2).reshape(-1, 5, 5, p.shape[2])
     """
     from numpy.linalg import norm
 

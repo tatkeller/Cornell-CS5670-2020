@@ -33,33 +33,24 @@ def compute_photometric_stereo_impl(lights, images):
     from numpy.linalg import inv
     from numpy.linalg import norm
     L = np.array(lights)
-    print(L.shape, "L")
-    print(np.array(images).shape)
-    testI = np.array(images)
-    print(testI[np.where(testI > 0)])
-    I = np.array(images).reshape((-1,np.array(images).shape[1]*np.array(images).shape[2]*np.array(images).shape[3]))
-    print(I[np.where(I > 0)])
-    print(I.shape, "I")
+    dim1 = np.array(images).shape[1]
+    dim2 = np.array(images).shape[2]
+    dim3 = np.array(images).shape[3]
+
+    I = np.array(images).reshape((-1, dim1 * dim2 * dim3))
     G = np.dot(pinv(L),I)
-    print(G.shape,"G",G.dtype)
     k = norm(G,2,0).reshape((1,-1)) #column based 2 norm
+
     k[k<1e-7] = 0
-    print(k.shape,"k",k.dtype)
-    Nravel = np.divide(G, k,order=0,dtype=np.float64)
-    Nravel[np.where(Nravel == np.inf)] = 0
-    print(Nravel.shape,"Nravel", Nravel.dtype)
-    N = Nravel.reshape((-1,np.array(images).shape[1],np.array(images).shape[2],np.array(images).shape[3]))
-    print(N.shape,"N", N.dtype)
+    Nravel = np.divide(G, k,out=np.zeros_like(G), where=k!=0, dtype=np.float64)
+
+    N = Nravel.reshape((-1, dim1, dim2, dim3))
     N = np.mean(N, axis=3)
-    print(N.shape, "N", N.dtype)
-    N = N.T
-    print(N.shape, "N", N.dtype)
-    k = k.reshape(-1).reshape((np.array(images).shape[1],np.array(images).shape[2],np.array(images).shape[3]))
-    print(k.shape,"k")
+
+    N = np.transpose(N, (1, 2, 0))
+    k = k.reshape(-1).reshape((dim1, dim2, dim3))
 
     return k, N
-    #raise NotImplementedError()
-
 
 def project_impl(K, Rt, points):
     """
@@ -71,7 +62,27 @@ def project_impl(K, Rt, points):
     Output:
         projections -- height x width x 2 array of 2D projections
     """
-    raise NotImplementedError()
+    # print (K.shape, K)
+    # print (Rt.shape, Rt)
+    # print (points.shape, points)
+    from numpy.linalg import multi_dot
+    # print (points)
+    # print (points.shape)
+    a = points.reshape((points.shape[0]*points.shape[1], -1))
+    b = np.ones(((points.shape[0]*points.shape[1], 1)))
+    points_proj = np.hstack((a, b))
+    print(points_proj.shape)
+    # res1 = np.dot(K, Rt)
+    # print(res1.shape)
+    res = multi_dot((K, Rt, points_proj.T))
+    print(res.shape)
+
+    c1 = res[0,:] / res[2,:]
+    c2 = res[1,:] / res[2,:]
+    c = np.vstack((c1, c2)).T
+    projections = c.reshape((points.shape[0], points.shape[1], -1))
+    print (projections.shape)
+    return projections
 
 
 def preprocess_ncc_impl(image, ncc_size):
@@ -113,17 +124,118 @@ def preprocess_ncc_impl(image, ncc_size):
     +------+------+  +------+------+  v
     width ------->
 
-    v = [ x111, x121, x211, x221, x112, x122, x212, x222 ]
+    v11 = [ x111, x121, x211, x221, x112, x122, x212, x222 ]
+    v12 = [ x111, x121, x211, x221, x112, x122, x212, x222 ]
+    v21 = [ x111, x121, x211, x221, x112, x122, x212, x222 ]
+    v22 = [ x111, x121, x211, x221, x112, x122, x212, x222 ]
+
+    2 X 2 X (2 X 2**2)
 
     see order argument in np.reshape
 
     Input:
         image -- height x width x channels image of type float32
         ncc_size -- integer width and height of NCC patch region; assumed to be odd
-    Output:
+    Output:              81    *      ([1,2,3]*9)
+
+                        9       9          1           25
+                          (2,2)
         normalized -- heigth x width x (channels * ncc_size**2) array
     """
-    raise NotImplementedError()
+
+    """
+    from numpy.linalg import norm
+    def partition(image,ncc_size):
+        overlapR = image.shape[0] % ncc_size
+        overlapC = image.shape[1] % ncc_size
+        if (overlapR) == 0 and (overlapC) == 0:
+            partition = image
+        elif (overlapR) == 0 and (not (overlapC) == 0):
+            partition = image[:-overlapC,:]
+        elif (not (overlapR) == 0) and (overlapC) == 0:
+            partition = image[:,:-overlapR]
+        else:
+            partition = image[:-overlapC,:-overlapR]
+        return partition
+
+    p = partition(image, ncc_size)
+
+    p = p.reshape(p.shape[0]//ncc_size, 
+                  ncc_size, p.shape[1]//ncc_size, 
+                  ncc_size, p.shape[2]).swapaxes(1, 2).reshape(-1, 5, 5, p.shape[2])
+    """
+    from numpy.linalg import norm
+
+    p = image
+
+    def rolling_window(a, window):
+        shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
+        strides = a.strides + (a.strides[-1],)
+        return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+
+    offset = ncc_size//2
+    windows = np.zeros((image.shape[0] - offset*2, image.shape[1] - offset*2,image.shape[2],ncc_size,ncc_size))
+
+    print(windows.shape)
+
+    print(image.shape, "image")
+
+    for i in range(ncc_size):
+        windows[i, :, 0, :, :] = np.transpose(rolling_window(image[i:image.shape[0]-ncc_size+i+1,:,0], ncc_size),(1,0,2))
+        windows[i, :, 1, :, :] = np.transpose(rolling_window(image[i:image.shape[0]-ncc_size+i+1,:,1], ncc_size),(1,0,2))
+        windows[i, :, 2, :, :] = np.transpose(rolling_window(image[i:image.shape[0]-ncc_size+i+1,:,2], ncc_size),(1,0,2))
+
+    p = windows
+
+    if p.shape[2] == 1:
+        # Mean
+        pMeanVal = np.mean(np.mean(p, axis = 1),axis=1)
+        means = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), pMeanVal)))
+        patchMinusMean = p
+        patchMinusMean = np.subtract(patchMinusMean,means)
+    
+        # Norm
+        normedP = norm(norm(norm(patchMinusMean,axis=1),axis=1),axis=1)
+
+        normedP[np.where(normedP < 1e-6)] = 0
+
+        ans = np.divide(patchMinusMean,normedP)
+
+    elif p.shape[2] == 3:
+        # Mean
+        prMeanVal = np.mean(np.mean(p[:,:,:,0], axis = 1),axis=1)
+        pbMeanVal = np.mean(np.mean(p[:,:,:,1], axis = 1),axis=1)
+        pgMeanVal = np.mean(np.mean(p[:,:,:,2], axis = 1),axis=1)
+        meansR = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), prMeanVal)))
+        meansB = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), pbMeanVal)))
+        meansG = np.array(list(map(lambda x : np.full((p.shape[0],p.shape[1]),x), pgMeanVal)))
+        p[:,:,0] = np.subtract(p[:,:,0],meansR)
+        p[:,:,1] = np.subtract(p[:,:,1],meansB)
+        p[:,:,2] = np.subtract(p[:,:,2],meansG)
+    
+        # Norm
+        normedP = norm(norm(norm(p,axis=1),axis=1),axis=1)
+
+        normedP[np.where(normedP < 1e-6)] = 0
+
+        ans = np.divide(p,normedP)
+
+
+    pad = np.zeros((image.shape[0], image.shape[1],image.shape[2],ncc_size,ncc_size))
+
+    pad[offset:-offset,offset:-offset,:,:,:] = ans
+
+    pad = pad.reshape((pad.shape[0],pad.shape[1],-1))
+
+    #ans = np.pad(ans, ((offset,offset),(offset,offset),0,0,0),'constant', constant_values=0)
+
+    print(pad.shape)
+    print(image.shape)
+
+    return pad
+
+    #raise NotImplementedError()
 
 
 def compute_ncc_impl(image1, image2):
